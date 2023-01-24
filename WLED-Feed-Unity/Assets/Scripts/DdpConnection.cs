@@ -7,18 +7,27 @@ namespace DefaultNamespace
     public class DdpConnection : UdpConnection
     {
         private const int DDP_DEFAULT_PORT = 1448;
-        private const int DDP_CHANNELS_PER_PACKET = 1440;
+        private const int DDP_CHANNELS_PER_PACKET = 1440; // 480 leds
         private const int DDP_TYPE_RGB24 = 0x0A;
         private const int DDP_TYPE_RGBW32 = 0x1A;
         private const int DDP_ID_DISPLAY = 1;
         private const byte DDP_FLAGS1_PUSH = 0x01;
-        private const byte DDP_FLAGS1_VER1 = 0x40;
+        private const byte DDP_FLAGS1_VER1 = 0x40; // version=1
 
-        byte realtimeBroadcast(byte type, IPAddress client, UInt16 length, byte[] buffer, byte bri, bool isRGBW)
+        //
+        // Send real time UDP updates to the specified client
+        //
+        // type   - protocol type (0=DDP, 1=E1.31, 2=ArtNet)
+        // client - the IP address to send to
+        // length - the number of pixels
+        // buffer - a buffer of at least length*4 bytes long
+        // isRGBW - true if the buffer contains 4 components per pixel
+
+        uint8_t sequenceNumber = 0; // this needs to be shared across all outputs
+
+        byte realtimeBroadcast(byte type, string client, UInt16 length, byte[] buffer, byte bri, bool isRGBW)
         {
-            if (!(apActive || interfacesInited) || !client[0] || !length) return 1; // network not initialised or dummy/unset IP address  031522 ajn added check for ap
-
-            // WiFiUDP ddpUdp;
+            if (!client[0] || !length) return 1; // network not initialised or dummy/unset IP address  031522 ajn added check for ap
 
             switch (type)
             {
@@ -36,7 +45,8 @@ namespace DefaultNamespace
                     {
                         if (sequenceNumber > 15) sequenceNumber = 0;
 
-                        if (!ddpUdp.beginPacket(client, DDP_DEFAULT_PORT))
+                        StartConnection(client, DDP_DEFAULT_PORT, DDP_DEFAULT_PORT); //sendPort, int receivePort??
+                        if (!udpClient)
                         {
                             // port defined in ESPAsyncE131.h
                             Debug.LogError("WiFiUDP.beginPacket returned an error");
@@ -60,39 +70,40 @@ namespace DefaultNamespace
 
                         // write the header
                         /*0*/
-                        ddpUdp.write(flags);
+                        Send(flags); 
                         /*1*/
-                        ddpUdp.write(sequenceNumber++ & 0x0F); // sequence may be unnecessary unless we are sending twice (as requested in Sync settings)
+                        Send(sequenceNumber++ & 0x0F); // sequence may be unnecessary unless we are sending twice (as requested in Sync settings)
                         /*2*/
-                        ddpUdp.write(isRGBW ? DDP_TYPE_RGBW32 : DDP_TYPE_RGB24);
+                        Send(isRGBW ? DDP_TYPE_RGBW32 : DDP_TYPE_RGB24);
                         /*3*/
-                        ddpUdp.write(DDP_ID_DISPLAY);
+                        Send(DDP_ID_DISPLAY);
                         // data offset in bytes, 32-bit number, MSB first
                         /*4*/
-                        ddpUdp.write(0xFF & (channel >> 24));
+                        Send(0xFF & (channel >> 24));
                         /*5*/
-                        ddpUdp.write(0xFF & (channel >> 16));
+                        Send(0xFF & (channel >> 16));
                         /*6*/
-                        ddpUdp.write(0xFF & (channel >> 8));
+                        Send(0xFF & (channel >> 8));
                         /*7*/
-                        ddpUdp.write(0xFF & (channel));
+                        Send(0xFF & (channel));
                         // data length in bytes, 16-bit number, MSB first
                         /*8*/
-                        ddpUdp.write(0xFF & (packetSize >> 8));
+                        Send(0xFF & (packetSize >> 8));
                         /*9*/
-                        ddpUdp.write(0xFF & (packetSize));
+                        Send(0xFF & (packetSize));
 
                         // write the colors, the write write(const byte *buffer, int size)
                         // function is just a loop internally too
                         for (int i = 0; i < packetSize; i += 3)
                         {
-                            ddpUdp.write(scale8(buffer[bufferOffset++], bri)); // R
-                            ddpUdp.write(scale8(buffer[bufferOffset++], bri)); // G
-                            ddpUdp.write(scale8(buffer[bufferOffset++], bri)); // B
-                            if (isRGBW) ddpUdp.write(scale8(buffer[bufferOffset++], bri)); // W
+                            Send(scale8(buffer[bufferOffset++], bri)); // R
+                            Send(scale8(buffer[bufferOffset++], bri)); // G
+                            Send(scale8(buffer[bufferOffset++], bri)); // B
+                            if (isRGBW) Send(scale8(buffer[bufferOffset++], bri)); // W
                         }
 
-                        if (!ddpUdp.endPacket())
+                        Stop();
+                        if (udpClient.isNotStopped())
                         {
                             Debug.LogError("WiFiUDP.endPacket returned an error");
                             return 1; // problem
@@ -113,9 +124,8 @@ namespace DefaultNamespace
             return 0;
         }
 
-        private byte scale8(byte _p0, byte _bri)
-        {
-            throw new NotImplementedException();
+        private byte scale8( byte i, byte scale) {
+            return (((uint16_t)i) * (1+(uint16_t)(scale))) >> 8;
         }
 
     }
