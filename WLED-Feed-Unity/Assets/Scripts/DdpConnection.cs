@@ -6,13 +6,13 @@ namespace DefaultNamespace
 {
     public class DdpConnection : UdpConnection
     {
-        private const int DDP_DEFAULT_PORT = VALUE;
-        private const int DDP_CHANNELS_PER_PACKET = VALUE;
-        private const int DDP_TYPE_RGB24 = VALUE;
-        private const int DDP_TYPE_RGBW32 = VALUE;
-        private const int DDP_ID_DISPLAY = VALUE;
-        private const byte DDP_FLAGS1_PUSH = VALUE;
-        private const byte DDP_FLAGS1_VER1 = VALUE;
+        private const int DDP_DEFAULT_PORT = 1448;
+        private const int DDP_CHANNELS_PER_PACKET = 1440;
+        private const int DDP_TYPE_RGB24 = 0x0A;
+        private const int DDP_TYPE_RGBW32 = 0x1A;
+        private const int DDP_ID_DISPLAY = 1;
+        private const byte DDP_FLAGS1_PUSH = 0x01;
+        private const byte DDP_FLAGS1_VER1 = 0x40;
 
         byte realtimeBroadcast(byte type, IPAddress client, UInt16 length, byte[] buffer, byte bri, bool isRGBW)
         {
