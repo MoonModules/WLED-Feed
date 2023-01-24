@@ -1,11 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using Unity.Collections;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.UI;
 
-public class CaptureRig : MonoBehaviour
+public class CaptureCube : MonoBehaviour
 {
     private struct CubeFace
     {
@@ -18,6 +19,10 @@ public class CaptureRig : MonoBehaviour
     public enum CaptureMethod { Simple, Async }
     public CaptureMethod Capture = CaptureMethod.Simple;
     public bool WriteDebugFile;
+    [Header("Network")]
+    public string SendIP = "127.0.0.1";
+    public int SendPort = 31371;
+    public int ReceivePort = 31371;
     [Header("Components")]
     public GameObject CameraPrefab;
     public GameObject CubePrefab;
@@ -29,6 +34,7 @@ public class CaptureRig : MonoBehaviour
     private RenderTexture m_captureRT;
     private NativeArray<byte> m_buffer;
     private int m_faceCount;
+    private UdpConnection m_connection;
 
     #region Unity callbacks
 
@@ -46,21 +52,26 @@ public class CaptureRig : MonoBehaviour
             Displays[i].texture = m_cubeFaces[i].RT;
 
         LedMask.mainTextureScale = Vector2.one * Resolution;
+
+        m_connection = new UdpConnection();
+        m_connection.StartConnection(SendIP, SendPort, ReceivePort);
     }
 
     private void Update()
     {
+        byte[] bytes;
         switch (Capture)
         {
             case CaptureMethod.Simple:
-                CaptureSimple();
+                bytes = CaptureSimple();
                 break;
             case CaptureMethod.Async:
-                CaptureAsync();
+                bytes = CaptureAsync();
                 break;
             default:
                 throw new ArgumentOutOfRangeException();
         }
+        m_connection.Send(bytes);
     }
 
     private void OnDestroy()
@@ -95,20 +106,23 @@ public class CaptureRig : MonoBehaviour
         return cubeFace;
     }
 
-    private void CaptureSimple()
+    #region Capture
+
+    private byte[] CaptureSimple()
     {
         Texture2D capture = new Texture2D(Resolution * m_faceCount, Resolution, TextureFormat.RGB24, false);
         for (int i = 0; i < m_faceCount; i++)
         {
             RenderTexture.active = m_cubeFaces[i].RT;
             capture.ReadPixels(new Rect(0, 0, Resolution, Resolution), i * Resolution, 0);
-            capture.Apply();
         }
         if (WriteDebugFile)
-            System.IO.File.WriteAllBytes("test.png", capture.EncodeToPNG());
+            File.WriteAllBytes("test.png", capture.EncodeToPNG());
+        
+        return capture.GetRawTextureData();
     }
 
-    private void CaptureAsync()
+    private byte[] CaptureAsync()
     {
         // Read back RenderTexture to CPU (see https://github.com/keijiro/AsyncCaptureTest)
         m_captureRT = new RenderTexture(Resolution, Resolution * m_faceCount, 0);
@@ -125,6 +139,8 @@ public class CaptureRig : MonoBehaviour
 
         m_buffer = new NativeArray<byte>(Resolution * Resolution * m_faceCount * 4, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
         AsyncGPUReadback.RequestIntoNativeArray(ref m_buffer, m_captureRT, 0, OnCompleteReadback);
+
+        return m_buffer.ToRawBytes();   // Untested
     }
 
     void OnCompleteReadback(AsyncGPUReadbackRequest request)
@@ -137,6 +153,8 @@ public class CaptureRig : MonoBehaviour
 
         using var encoded = ImageConversion.EncodeNativeArrayToPNG(m_buffer, m_captureRT.graphicsFormat, (uint)m_captureRT.width, (uint)m_captureRT.height);
         if (WriteDebugFile)
-            System.IO.File.WriteAllBytes("test.png", encoded.ToArray());
+            File.WriteAllBytes("test.png", encoded.ToArray());
     }
+
+    #endregion
 }
