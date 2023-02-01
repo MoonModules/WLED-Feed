@@ -87,12 +87,12 @@ public class UdpConnection
         return pendingMessages;
     }
  
-    public void Send(string message)
-    {
-        Debug.Log(String.Format("Send msg to ip:{0} port:{1} msg:{2}",senderIp,senderPort,message));
-        Byte[] sendBytes = Encoding.UTF8.GetBytes(message);
-        Send(sendBytes);
-    }
+    // public void Send(string message)
+    // {
+    //     Debug.Log(String.Format("Send msg to ip:{0} port:{1} msg:{2}",senderIp,senderPort,message));
+    //     Byte[] sendBytes = Encoding.UTF8.GetBytes(message);
+    //     Send(sendBytes);
+    // }
 
     public void Send(byte[] sendBytes)
     {

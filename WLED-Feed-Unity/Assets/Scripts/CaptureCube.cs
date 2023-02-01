@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using DefaultNamespace;
 using Unity.Collections;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -20,9 +21,9 @@ public class CaptureCube : MonoBehaviour
     public CaptureMethod Capture = CaptureMethod.Simple;
     public bool WriteDebugFile;
     [Header("Network")]
-    public string SendIP = "127.0.0.1";
-    public int SendPort = 31371;
-    public int ReceivePort = 31371;
+    public string SendIP = "192.168.121.109";
+    public int SendPort = DdpConnection.DDP_DEFAULT_PORT;
+    public int ReceivePort = DdpConnection.DDP_DEFAULT_PORT;
     [Header("Components")]
     public GameObject CameraPrefab;
     public GameObject CubePrefab;
@@ -34,7 +35,7 @@ public class CaptureCube : MonoBehaviour
     private RenderTexture m_captureRT;
     private NativeArray<byte> m_buffer;
     private int m_faceCount;
-    private UdpConnection m_connection;
+    private DdpConnection m_connection;
 
     #region Unity callbacks
 
@@ -53,7 +54,7 @@ public class CaptureCube : MonoBehaviour
 
         LedMask.mainTextureScale = Vector2.one * Resolution;
 
-        m_connection = new UdpConnection();
+        m_connection = new DdpConnection();
         m_connection.StartConnection(SendIP, SendPort, ReceivePort);
     }
 
@@ -71,7 +72,7 @@ public class CaptureCube : MonoBehaviour
             default:
                 throw new ArgumentOutOfRangeException();
         }
-        m_connection.Send(bytes);
+        m_connection.realtimeBroadcast(0, SendIP, Resolution * Resolution, bytes, 1, false);
     }
 
     private void OnDestroy()

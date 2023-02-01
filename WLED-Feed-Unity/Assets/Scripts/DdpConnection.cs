@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Net;
 using UnityEngine;
 
@@ -6,30 +7,22 @@ namespace DefaultNamespace
 {
     public class DdpConnection : UdpConnection
     {
-        private const int DDP_DEFAULT_PORT = 1448;
-        private const int DDP_CHANNELS_PER_PACKET = 1440; // 480 leds
-        private const int DDP_TYPE_RGB24 = 0x0A;
-        private const int DDP_TYPE_RGBW32 = 0x1A;
-        private const int DDP_ID_DISPLAY = 1;
-        private const byte DDP_FLAGS1_PUSH = 0x01;
-        private const byte DDP_FLAGS1_VER1 = 0x40; // version=1
+        public const int DDP_DEFAULT_PORT = 1448;
+        public const int DDP_CHANNELS_PER_PACKET = 1440; // 480 leds
+        public const int DDP_TYPE_RGB24 = 0x0A;
+        public const int DDP_TYPE_RGBW32 = 0x1A;
+        public const int DDP_ID_DISPLAY = 1;
+        public const byte DDP_FLAGS1_PUSH = 0x01;
+        public const byte DDP_FLAGS1_VER1 = 0x40; // version=1
 
-        //
-        // Send real time UDP updates to the specified client
-        //
-        // type   - protocol type (0=DDP, 1=E1.31, 2=ArtNet)
-        // client - the IP address to send to
-        // length - the number of pixels
-        // buffer - a buffer of at least length*4 bytes long
-        // isRGBW - true if the buffer contains 4 components per pixel
 
         int sequenceNumber = 0; // this needs to be shared across all outputs
 
-        string tx_buffer = ""; //string of bytes
+        private byte[] tx_buffer; //string of bytes
 
-        bool beginPacket(string ip, int port) {
+        bool beginPacket(string ip, int port, int pixelCount) {
 
-            tx_buffer = "";
+            tx_buffer = new byte[pixelCount * 4];
 
             //init udp_server socket if not done already
             //StartConnection(ip, port, port); //sendPort, int receivePort??
@@ -50,20 +43,26 @@ namespace DefaultNamespace
             if(tx_buffer.Length == 1460) {
                 endPacket();
             }
-            tx_buffer += data; //add to string o 
+            tx_buffer.Append(data); //add to string o 
             return true;
         }
-
-
-        byte realtimeBroadcast(byte type, string client, int length, byte[] buffer, byte bri, bool isRGBW)
+        
+        // Send real time UDP updates to the specified client
+        //
+        // type   - protocol type (0=DDP, 1=E1.31, 2=ArtNet)
+        // client - the IP address to send to
+        // pixelCount - the number of pixels
+        // buffer - a buffer of at least length*4 bytes long
+        // isRGBW - true if the buffer contains 4 components per pixel
+        public byte realtimeBroadcast(byte type, string client, int pixelCount, byte[] buffer, byte bri, bool isRGBW)
         {
-            if (client=="" || length==0) return 1; // network not initialised or dummy/unset IP address  031522 ajn added check for ap
+            if (client=="" || pixelCount==0) return 1; // network not initialised or dummy/unset IP address  031522 ajn added check for ap
 
             switch (type)
             {
                 case 0: // DDP
                     // calculate the number of UDP packets we need to send
-                    int channelCount = length * (isRGBW ? 4 : 3); // 1 channel for every R,G,B value
+                    int channelCount = pixelCount * (isRGBW ? 4 : 3); // 1 channel for every R,G,B value
                     int packetCount = ((channelCount - 1) / DDP_CHANNELS_PER_PACKET) + 1;
 
                     // there are 3 channels per RGB pixel
@@ -75,11 +74,7 @@ namespace DefaultNamespace
                     {
                         if (sequenceNumber > 15) sequenceNumber = 0;
 
-                        if (beginPacket(client, DDP_DEFAULT_PORT)) {  // port defined in ESPAsyncE131.h
-                            // port defined in ESPAsyncE131.h
-                            Debug.LogError("WiFiUDP.beginPacket returned an error");
-                            return 1; // problem
-                        }
+                        beginPacket(client, DDP_DEFAULT_PORT, pixelCount);
 
                         // the amount of data is AFTER the header in the current packet
                         int packetSize = DDP_CHANNELS_PER_PACKET;
