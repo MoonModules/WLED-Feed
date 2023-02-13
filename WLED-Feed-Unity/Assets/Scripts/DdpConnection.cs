@@ -117,7 +117,7 @@ namespace DefaultNamespace
 
                         // write the colors, the write write(const byte *buffer, int size)
                         // function is just a loop internally too
-                        for (int i = 0; i < packetSize; i += 3)
+                        for (int i = 0; i < pixelCount; i += 1)
                         {
                             write(scale8(buffer[bufferOffset++], bri)); // R
                             write(scale8(buffer[bufferOffset++], bri)); // G
